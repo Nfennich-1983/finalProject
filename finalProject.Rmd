@@ -1,0 +1,285 @@
+---
+title: "finalProject"
+author: "x"
+date: "9/29/2021"
+output: html_document
+---
+
+#*Objective*
+
+>I would like to investigate what specific reason that led to the increase in NC population, >>is it because people found a better job opportunity, affordable housing (compared with the >>other states )or because of Nc is a good place for retirement? Also, I would like to map >>cities in NC that most people are moving to and what cities and countries that they are >>moving from.
+
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(skimr)
+library(usmap)
+library(ggplot2)
+library( ggforce )
+library(patchwork)
+```
+
+***A. Load all Data ***
+
+```{r message=FALSE, warning=FALSE}
+homesold <-read_csv("homes_sold.csv")
+popd <-read_csv("growth.csv")
+gusa <- map_data("state")
+migration <-read_csv("migration_from.csv")
+dominants <-read_csv("dominant.csv")
+costliv<- read_csv("cost_living.csv")
+
+```
+
+
+---------------------------------------------------------
+
+***Plot #1 New house sold summary***   
+
+
+
+```{r  message=FALSE, warning=FALSE}
+homesold %>% ggplot( aes( New_h_S ) ) + 
+  geom_boxplot(fill = "white", colour = "#3366FF",
+               outlier.colour = "red", outlier.shape = 1)+
+  labs( title="sammuraize numbers of new house sold ", 
+        x="Years"
+  )+
+  theme(panel.background = element_rect(fill = "linen"))
+```
+
+this plot summarize New house sold data 
+
+  Min.   : 306000  
+  1st Qu.: 505000  
+  Median : 757000  
+  Mean   : 827516  
+  3rd Qu.:1012000  
+  Max.   :1815000
+
+--------------------------------------------------------------------
+
+***Plot #2 NC New House Sold by population  over year***   
+
+```{r}
+
+highlight_df <- homesold %>% filter(Year>=2016)
+
+homesold %>% ggplot( aes(Year, New_h_S / population )) +
+  geom_line()+
+    geom_line(data=highlight_df,color ="red")+
+  scale_x_continuous( breaks = scales::breaks_extended(n=20) )+
+  labs( title="NC New House Sold by population  over years ", 
+        subtitle="From 1990-2020", 
+        x="Years", 
+        y="New house sold by population" )+
+theme(plot.title = element_text(size = 20, color = "#1b98e0"),
+     plot.subtitle = element_text(size = 10, color = "red"))+
+  theme(plot.background = element_rect(colour = "red", size = 2))
+
+
+
+
+```
+
+ we notice that there is a huge increase of house sold from 2016 to 2020.
+ 
+------------------------------------------------------------------------ 
+
+***Plot #3 % of grow by state***   
+
+```{r}
+
+
+
+
+highlight_tf <- popd %>% filter(region == "north carolina" )
+
+
+popd %>% ggplot( aes( x = reorder(region, -Percent), Percent ) ) + 
+  geom_bar( stat = "identity" ) +
+  geom_bar(stat = "identity", data= highlight_tf, fill ="red")+
+  scale_fill_discrete()+ 
+  guides( x = guide_axis(angle = 90) )+
+  labs( title="% of growth for each state from the highiest  to the lowest ", 
+        x ="States", 
+        y="Percentage of growth" )+
+   annotate(geom = "text", x = 8, y = 0.04,
+            label = "the 9th growing state", hjust = "left" ,color="red")+
+    theme(plot.title = element_text(hjust = 0.5, color="red")) +
+ theme(plot.background = element_rect(fill = "lightblue"))
+  
+
+```
+
+North Carolina is the 9th growing State
+
+
+------------------------------------------------------------------------
+
+```{r out.width = '80%' }
+#8----------------------------same Plot as #6-----------------
+
+dominants %>% ggplot( aes( ratio_sex, log(Pop) )) +
+ geom_point(data = filter(dominants, State == "North Carolina"),
+            color = "red",
+            size = 3) +
+  geom_point(aes( color=factor(State)))+
+ facet_wrap(~dominant_sex)+
+geom_mark_ellipse( aes( label= dominant_group, group = dominant_group
+ ) ) +
+  labs( title="Dominant Sex and groupe age by states")+
+  theme(plot.title = element_text(hjust = 0.5, color="blue", size = 15))+
+   guides(col = FALSE)+
+    theme_minimal() 
+
+
+
+```
+
+***Plot #4 Mapping density population *** 
+
+```{r}
+state_centroids <- summarize(group_by(gusa, region),
+                             x = mean(range(long)), y = mean(range(lat)))
+
+state_pops <- inner_join(popd, state_centroids, "region")
+
+ggplot(gusa) +
+  geom_polygon(aes(long, lat, group = group),
+               fill = NA, color = "black") +
+   geom_point(aes(x, y, size = Pop), data = state_pops, color="red") +
+   scale_size_area() +
+  coord_map("bonne", parameters=45) +
+  ggthemes::theme_pander()+
+   labs( title="Mapping Density Population Across USA")+
+  theme(legend.position = "none")+
+  theme(plot.title = element_text(hjust = 0.5, color="blue"))
+```
+
+North Carolina  is one of the densest population 
+
+------------------------------------------------------------------------
+
+***Plot #5 the most state sending migrant  to North carolina*** 
+
+
+
+```{r}
+#7---------------Migration-------------------------
+
+
+migration_pops <- inner_join(migration, state_centroids, "region")
+
+sp2 <- select(migration_pops, region = region, T_North_Carolina)
+spr2 <- mutate(sp2, rankpop = rank(T_North_Carolina))
+
+gusa_rpop <- left_join(gusa, spr2, "region")
+
+ggplot(gusa_rpop) +
+  geom_polygon(aes(long, lat, group = group, fill = rankpop )) +
+  coord_map("bonne", parameters=45, ) +
+  ggthemes::theme_map()+
+  labs( title="Rank the Most sending Migrant to NC")+
+  theme(plot.title = element_text(hjust = 0.5, color="blue", size = 15))
+```
+
+The dark area is the most sending migrant like North Dakota ,South Dakota, New York ,Nevada
+
+------------------------------------------------------------------------
+
+***Plot #6  Dominant Sex and groupe age by State*** 
+
+
+
+```{r }
+
+dominants %>% ggplot( aes( ratio_sex, log(Pop) )) +
+ geom_point(data = filter(dominants, State == "North Carolina"),
+            color = "red",
+            size = 3) +
+  geom_point(aes( color=factor(State)))+
+ facet_wrap(~dominant_sex)+
+geom_mark_ellipse( aes( label= dominant_group, group = dominant_group
+ ) ) +
+  labs( title="Dominant Sex and groupe age by states")+
+  theme(plot.title = element_text(hjust = 0.5, color="blue", size = 15))+
+    theme_minimal() +
+  theme(
+  legend.background = element_rect(
+    fill = "lemonchiffon", 
+    colour = "grey50", 
+    size = 1
+  )
+)
+
+
+
+```
+
+
+this plot show hat Nc has a Female dominant Sex with adult dominant group age   
+
+------------------------------------------------------------------------
+
+***Plot #7  compare some cost of living between the top 10 growing states *** 
+
+
+```{r}
+#9----------------------------plot
+filter_state <- costliv %>% filter(State == 'North Carolina'| 
+                                    State == 'California'|
+                                    State == 'Texas'|
+                                    State == 'Florida'|
+                                    State == 'New York'|
+                                    State == 'Illinois'|
+                                    State == 'Ohio'|
+                                    State == 'Georjia'|
+                                    State == 'Michgan'
+                                   )  
+highlight_GC <- filter_state %>% filter(State== "North Carolina")
+
+GC<-filter_state %>% ggplot( aes(x = reorder(State, +groceryCost) , groceryCost )) +
+    geom_point()+
+geom_point(data=highlight_GC, color ="red")+
+  guides( x = guide_axis(angle = 90) )
+
+
+HC<-filter_state %>% ggplot( aes(x = reorder(State, +housingCost) , housingCost )) +
+  geom_point() +
+  geom_point(data=highlight_GC, color ="red")+
+  guides( x = guide_axis(angle = 90) )
+
+UC<-filter_state %>% ggplot( aes(x = reorder(State, +utilitiesCost) , utilitiesCost )) +
+  geom_point() +
+  geom_point(data=highlight_GC, color ="red")+
+  guides( x = guide_axis(angle = 90) )
+
+TC<-filter_state %>% ggplot( aes(x = reorder(State, +transportationCost) , transportationCost )) +
+  geom_point() +
+  geom_point(data=highlight_GC, color ="red")+
+  guides( x = guide_axis(angle = 90) )+
+  
+
+
+
+```
+
+```{r}
+#GC+UC+HC+
+
+  TC
+```
+
+North Carolina is the 3th state  cheapest in Utility Cost , 4th cheapest in Grocery Cost ,2nd cheaper in housing cost and 2nd also Transportation
+
+
+***B. Conclusion *** 
+
+According to the few Plot that I was able to make .The reason why North Carolina is growing Because of cost of leaving is less comparing to some other States 
+
+
+
+
+
+
